@@ -1,0 +1,778 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agendamento de Apresentações</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    
+    <!-- Biblioteca Driver.js para o Tour Guiado -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.css"/>
+    <script src="https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.js.iife.js"></script>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Poppins', 'sans-serif'],
+                    },
+                    colors: {
+                        primary: '#4f46e5',
+                        primaryHover: '#4338ca',
+                        secondary: '#10b981',
+                        darkBg: '#0f172a',
+                    },
+                    boxShadow: {
+                        'soft': '0 10px 40px -10px rgba(0,0,0,0.08)',
+                        'glow': '0 0 20px rgba(79, 70, 229, 0.4)'
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <style>
+        body {
+            font-family: 'Poppins', sans-serif;
+            background-color: #f8fafc;
+        }
+
+        /* Efeitos de Vidro (Glassmorphism) */
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+        }
+
+        .glass-modal {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        /* Background animado da tela inicial */
+        .bg-animated-gradient {
+            background: linear-gradient(-45deg, #3b82f6, #4f46e5, #7c3aed, #0ea5e9);
+            background-size: 400% 400%;
+            animation: gradientBG 15s ease infinite;
+        }
+
+        @keyframes gradientBG {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        /* Animações de Toast e Modais */
+        .toast-enter { transform: translateY(100%); opacity: 0; }
+        .toast-enter-active { transform: translateY(0); opacity: 1; transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
+        .toast-exit { transform: translateY(0); opacity: 1; }
+        .toast-exit-active { transform: translateY(100%); opacity: 0; transition: all 0.3s ease; }
+
+        .modal-active { opacity: 1 !important; pointer-events: auto !important; }
+        .modal-active .modal-container { transform: scale(1) translateY(0) !important; opacity: 1 !important; }
+        .modal-container { transform: scale(0.95) translateY(-20px); opacity: 0; transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
+        
+        /* Grid Slot Hover */
+        .slot-card { transition: all 0.3s ease; }
+        .slot-card:hover { transform: translateY(-4px); }
+
+        /* Estilos Customizados para o Tour (Driver.js) */
+        .driver-popover {
+            border-radius: 1.5rem !important;
+            font-family: 'Poppins', sans-serif !important;
+            border: none !important;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25) !important;
+            padding: 20px !important;
+        }
+        .driver-popover-title {
+            font-weight: 700 !important;
+            font-size: 1.25rem !important;
+            color: #1e293b !important;
+            margin-bottom: 8px !important;
+        }
+        .driver-popover-description {
+            color: #475569 !important;
+            font-size: 0.95rem !important;
+            line-height: 1.5 !important;
+        }
+        .driver-popover-footer button {
+            border-radius: 0.75rem !important;
+            font-weight: 600 !important;
+            padding: 8px 16px !important;
+            text-shadow: none !important;
+            transition: all 0.2s !important;
+        }
+        .driver-popover-next-btn {
+            background-color: #4f46e5 !important;
+            color: white !important;
+            border: none !important;
+        }
+        .driver-popover-next-btn:hover { background-color: #4338ca !important; }
+        .driver-popover-prev-btn {
+            background-color: #f1f5f9 !important;
+            color: #475569 !important;
+            border: none !important;
+        }
+        .driver-popover-prev-btn:hover { background-color: #e2e8f0 !important; }
+    </style>
+</head>
+<body class="text-slate-800 antialiased min-h-screen flex flex-col relative overflow-x-hidden">
+
+    <!-- Welcome Screen -->
+    <div id="welcome-screen" class="fixed inset-0 z-50 flex items-center justify-center bg-animated-gradient transition-opacity duration-700">
+        <div class="absolute top-10 left-10 w-32 h-32 bg-white rounded-full mix-blend-overlay filter blur-2xl opacity-20 animate-pulse"></div>
+        <div class="absolute bottom-10 right-10 w-48 h-48 bg-purple-300 rounded-full mix-blend-overlay filter blur-3xl opacity-30"></div>
+
+        <div class="glass-panel p-8 md:p-12 rounded-3xl shadow-2xl max-w-lg w-11/12 text-center relative z-10 transform transition-all">
+            <div class="w-20 h-20 mx-auto bg-gradient-to-tr from-indigo-500 to-purple-500 rounded-2xl flex items-center justify-center shadow-glow mb-6 transform -rotate-6">
+                <i class="fas fa-calendar-check text-4xl text-white transform rotate-6"></i>
+            </div>
+            <h1 class="text-3xl md:text-4xl font-bold text-slate-800 mb-3 tracking-tight">Agendamento de Apresentações</h1>
+            <div class="w-16 h-1 bg-indigo-500 mx-auto rounded-full mb-6"></div>
+            
+            <div class="space-y-4 mb-8 text-left">
+                <div class="flex items-center text-slate-600 bg-white/50 p-3 rounded-xl">
+                    <div class="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 mr-4 shrink-0">
+                        <i class="fas fa-calendar-day"></i>
+                    </div>
+                    <div>
+                        <p class="text-xs font-semibold text-slate-400 uppercase">Data Única</p>
+                        <p class="font-medium">27 de Junho</p>
+                    </div>
+                </div>
+                <div class="flex items-center text-slate-600 bg-white/50 p-3 rounded-xl">
+                    <div class="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center text-purple-600 mr-4 shrink-0">
+                        <i class="fas fa-clock"></i>
+                    </div>
+                    <div>
+                        <p class="text-xs font-semibold text-slate-400 uppercase">Horários</p>
+                        <p class="font-medium">08:00 às 11:00 (20 min)</p>
+                    </div>
+                </div>
+            </div>
+            
+            <button id="btn-enter" class="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-semibold py-4 px-8 rounded-xl shadow-lg hover:shadow-xl hover:-translate-y-1 transition-all duration-300 flex items-center justify-center text-lg">
+                <span>Acessar o Sistema</span>
+                <i class="fas fa-arrow-right ml-3"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- App Content (Initially Hidden) -->
+    <div id="app-content" class="hidden flex-col min-h-screen w-full transition-opacity duration-500">
+        <!-- Header -->
+        <header class="glass-panel sticky top-0 z-30 shadow-sm">
+            <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
+                <div class="flex items-center space-x-3">
+                    <button id="btn-back-home" class="w-10 h-10 rounded-full hover:bg-slate-200/60 flex items-center justify-center text-slate-600 transition-colors mr-1 sm:mr-2" title="Voltar ao início">
+                        <i class="fas fa-arrow-left"></i>
+                    </button>
+                    <div class="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-md hidden sm:flex">
+                        <i class="fas fa-calendar-alt text-white text-lg"></i>
+                    </div>
+                    <div>
+                        <h1 class="text-xl font-bold text-slate-800 leading-tight">Painel de Apresentações</h1>
+                        <p class="text-xs text-indigo-600 font-semibold uppercase tracking-wider">27 de Junho</p>
+                    </div>
+                </div>
+                
+                <button id="btn-start-tour" class="flex items-center bg-indigo-50 hover:bg-indigo-100 cursor-pointer px-4 py-2 rounded-full border border-indigo-100 transition-colors shadow-sm">
+                    <i class="fas fa-play-circle text-indigo-500 mr-2 animate-pulse"></i>
+                    <span class="text-sm font-medium text-indigo-800">Como usar</span>
+                </button>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="flex-grow max-w-5xl mx-auto w-full px-4 py-10 sm:px-6 lg:px-8">
+            <div class="mb-8 flex flex-col md:flex-row md:justify-between md:items-end gap-4">
+                <div>
+                    <h2 class="text-2xl font-bold text-slate-800">Grade de Horários</h2>
+                    <p class="text-slate-500 mt-1">Duração: 20 minutos por grupo.</p>
+                </div>
+                
+                <!-- Legenda -->
+                <div id="tour-legenda" class="flex space-x-6 bg-white p-3 rounded-2xl shadow-sm border border-slate-100">
+                    <div class="flex items-center">
+                        <div class="w-3 h-3 rounded-full bg-emerald-400 shadow-sm mr-2"></div>
+                        <span class="text-sm font-medium text-slate-600">Disponível</span>
+                    </div>
+                    <div class="flex items-center">
+                        <div class="w-3 h-3 rounded-full bg-rose-400 shadow-sm mr-2"></div>
+                        <span class="text-sm font-medium text-slate-600">Ocupado</span>
+                    </div>
+                </div>
+            </div>
+
+            <div id="schedule-grid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
+                <!-- Time slots gerados via JS -->
+            </div>
+        </main>
+
+        <!-- Footer -->
+        <footer class="bg-white border-t border-slate-200 mt-auto">
+            <div class="max-w-5xl mx-auto px-4 py-6 flex flex-col sm:flex-row justify-between items-center gap-4 text-sm text-slate-500">
+                <p class="font-medium">&copy; 2026 Sistema de Agendamento</p>
+                <div class="flex items-center space-x-2 sm:space-x-4">
+                    <button id="btn-export-excel" class="hidden bg-emerald-50 text-emerald-600 hover:bg-emerald-100 px-4 py-2 rounded-xl transition flex items-center font-semibold">
+                        <i class="fas fa-file-excel mr-2"></i> Exportar Dados
+                    </button>
+                    <button id="btn-open-admin" class="bg-slate-50 text-slate-600 hover:bg-slate-100 px-4 py-2 rounded-xl transition flex items-center font-medium">
+                        <i class="fas fa-lock mr-2"></i> Área do Professor
+                    </button>
+                </div>
+            </div>
+        </footer>
+    </div>
+
+    <!-- Booking Modal -->
+    <div id="booking-modal" class="modal opacity-0 pointer-events-none fixed inset-0 z-50 flex items-center justify-center px-4">
+        <div class="modal-overlay absolute inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity"></div>
+        <div class="modal-container glass-modal w-full max-w-lg mx-auto rounded-3xl shadow-2xl z-50 overflow-hidden relative">
+            <div class="bg-gradient-to-r from-indigo-600 to-purple-600 p-6 text-white flex justify-between items-center">
+                <div>
+                    <h3 class="text-xl font-bold">Agendar Apresentação</h3>
+                    <p class="text-indigo-100 text-sm mt-1">Horário selecionado: <span id="selected-time-display" class="font-bold bg-white/20 px-2 py-1 rounded-md ml-1"></span></p>
+                </div>
+                <button class="modal-close text-white/70 hover:text-white transition-colors p-2 rounded-full hover:bg-white/10">
+                    <i class="fas fa-times text-xl"></i>
+                </button>
+            </div>
+            
+            <form id="booking-form" class="p-6 md:p-8 space-y-5">
+                <input type="hidden" id="selected-time">
+                
+                <div>
+                    <label class="block text-sm font-semibold text-slate-700 mb-2">Título do Projeto <span class="text-rose-500">*</span></label>
+                    <input type="text" id="project-title" required placeholder="Ex: Sistema de Irrigação Inteligente" 
+                           class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all text-slate-700">
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-semibold text-slate-700 mb-2">Integrantes do Grupo <span class="text-rose-500">*</span></label>
+                    <textarea id="group-members" required rows="3" placeholder="João Silva, Maria Souza..." 
+                              class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all text-slate-700 resize-none"></textarea>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-semibold text-slate-700 mb-2">Materiais Necessários</label>
+                    <input type="text" id="materials" placeholder="Ex: Projetor, caixa de som, mesa extra..." 
+                           class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all text-slate-700">
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-semibold text-slate-700 mb-2">Senha do Grupo <span class="text-xs font-normal text-slate-400 ml-1">(para desmarcar se precisar)</span> <span class="text-rose-500">*</span></label>
+                    <input type="password" id="group-pin" required placeholder="Crie uma senha simples (ex: 1234)" 
+                           class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all text-slate-700">
+                </div>
+                
+                <div class="pt-4 flex flex-col sm:flex-row gap-3">
+                    <button type="button" class="modal-close w-full sm:w-1/3 px-4 py-3 bg-white border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-50 transition font-semibold">Cancelar</button>
+                    <button type="submit" class="w-full sm:w-2/3 px-4 py-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 shadow-md hover:shadow-lg transition font-semibold flex justify-center items-center">
+                        <i class="fas fa-check mr-2"></i> Confirmar Reserva
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Details Modal -->
+    <div id="details-modal" class="modal opacity-0 pointer-events-none fixed inset-0 z-50 flex items-center justify-center px-4">
+        <div class="modal-overlay absolute inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity"></div>
+        <div class="modal-container glass-modal w-full max-w-md mx-auto rounded-3xl shadow-2xl z-50 overflow-hidden">
+            <div class="p-6 md:p-8">
+                <div class="flex justify-between items-start mb-6">
+                    <div class="flex items-center">
+                        <div class="w-12 h-12 rounded-full bg-rose-100 flex items-center justify-center text-rose-500 mr-4">
+                            <i class="fas fa-clock text-xl"></i>
+                        </div>
+                        <div>
+                            <h3 class="text-xl font-bold text-slate-800">Horário Ocupado</h3>
+                            <p class="text-rose-500 font-bold" id="detail-time"></p>
+                        </div>
+                    </div>
+                    <button class="modal-close-details text-slate-400 hover:text-slate-600 transition-colors bg-slate-100 hover:bg-slate-200 p-2 rounded-full">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                
+                <div id="restricted-area" class="space-y-4">
+                    <div id="restricted-message" class="bg-amber-50 border border-amber-200 text-amber-700 p-4 rounded-xl text-sm font-medium flex items-start">
+                        <i class="fas fa-lock mt-1 mr-3 text-amber-500 text-lg"></i>
+                        <p>Os detalhes deste agendamento são restritos ao professor.</p>
+                    </div>
+                    
+                    <div class="mt-6 pt-6 border-t border-slate-100">
+                        <p class="text-sm font-semibold text-slate-700 mb-2">Este é o seu grupo? <span class="font-normal text-slate-500 text-xs flex sm:inline mt-1 sm:mt-0">Insira a senha criada no agendamento para desmarcar.</span></p>
+                        <div class="flex space-x-2">
+                            <input type="password" id="cancel-pin" placeholder="Senha do grupo" 
+                                   class="flex-1 px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-700 text-sm">
+                            <button id="btn-user-cancel" class="px-4 py-2 bg-rose-50 text-rose-600 hover:bg-rose-500 hover:text-white rounded-xl transition-all font-semibold text-sm flex items-center">
+                                <i class="fas fa-trash-alt sm:mr-2"></i> <span class="hidden sm:inline">Desmarcar</span>
+                            </button>
+                        </div>
+                        <p id="cancel-error" class="text-xs text-rose-500 mt-2 hidden">Senha incorreta. Tente novamente.</p>
+                    </div>
+                </div>
+
+                <div id="sensitive-details" class="hidden space-y-4">
+                    <div class="bg-slate-50 p-4 rounded-xl border border-slate-100">
+                        <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Projeto</p>
+                        <p id="detail-title" class="font-semibold text-slate-800 text-lg"></p>
+                    </div>
+                    <div class="bg-slate-50 p-4 rounded-xl border border-slate-100">
+                        <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Integrantes</p>
+                        <p id="detail-members" class="text-slate-700"></p>
+                    </div>
+                    <div class="bg-slate-50 p-4 rounded-xl border border-slate-100">
+                        <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Materiais</p>
+                        <p id="detail-materials" class="text-slate-700"></p>
+                    </div>
+                    
+                    <button id="btn-delete-booking" class="w-full mt-6 py-3 px-4 bg-rose-50 text-rose-600 border border-rose-200 hover:bg-rose-500 hover:text-white rounded-xl transition-all font-semibold flex justify-center items-center">
+                        <i class="fas fa-trash-alt mr-2"></i> Liberar este horário
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Admin Login Modal -->
+    <div id="admin-modal" class="modal opacity-0 pointer-events-none fixed inset-0 z-50 flex items-center justify-center px-4">
+        <div class="modal-overlay-admin absolute inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity"></div>
+        <div class="modal-container glass-modal w-full max-w-sm mx-auto rounded-3xl shadow-2xl z-50 overflow-hidden">
+            <div class="p-6 md:p-8">
+                <div class="flex justify-between items-center mb-6">
+                    <div class="flex items-center space-x-3">
+                        <div class="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-600">
+                            <i class="fas fa-shield-alt"></i>
+                        </div>
+                        <h3 class="text-xl font-bold text-slate-800">Acesso Restrito</h3>
+                    </div>
+                    <button class="modal-close-admin text-slate-400 hover:text-slate-600 transition-colors">
+                        <i class="fas fa-times text-xl"></i>
+                    </button>
+                </div>
+                
+                <div class="mb-6">
+                    <label for="admin-pwd" class="block text-sm font-semibold text-slate-700 mb-2">Senha do Professor</label>
+                    <input type="password" id="admin-pwd" placeholder="Digite a senha" 
+                           class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all text-slate-700">
+                </div>
+                
+                <button id="btn-admin-submit" class="w-full py-3 bg-slate-800 text-white rounded-xl hover:bg-slate-700 shadow-md transition font-semibold flex justify-center items-center">
+                    <i class="fas fa-sign-in-alt mr-2"></i> Entrar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Delete Confirmation Modal -->
+    <div id="confirm-delete-modal" class="modal opacity-0 pointer-events-none fixed inset-0 z-[60] flex items-center justify-center px-4">
+        <div class="modal-overlay-confirm absolute inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity"></div>
+        <div class="modal-container glass-modal w-full max-w-sm mx-auto rounded-3xl shadow-2xl z-[60] overflow-hidden">
+            <div class="p-6 text-center">
+                <div class="w-16 h-16 rounded-full bg-rose-100 text-rose-500 flex items-center justify-center mx-auto mb-4">
+                    <i class="fas fa-exclamation-triangle text-2xl"></i>
+                </div>
+                <h3 class="text-xl font-bold text-slate-800 mb-2">Cancelar Agendamento?</h3>
+                <p class="text-slate-500 text-sm mb-6">Esta ação liberará o horário e os dados do projeto serão perdidos. Tem certeza?</p>
+                <div class="flex space-x-3">
+                    <button id="btn-cancel-delete" class="flex-1 py-3 px-4 bg-slate-100 text-slate-700 rounded-xl hover:bg-slate-200 font-semibold transition">Não, voltar</button>
+                    <button id="btn-confirm-delete" class="flex-1 py-3 px-4 bg-rose-500 text-white rounded-xl hover:bg-rose-600 font-semibold shadow-md transition">Sim, cancelar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast-container" class="fixed bottom-5 left-1/2 transform -translate-x-1/2 z-[70] pointer-events-none">
+        <div id="toast" class="toast-enter bg-slate-800 text-white px-6 py-3 rounded-full shadow-2xl flex items-center space-x-3 hidden">
+            <i id="toast-icon" class="fas fa-check-circle text-emerald-400"></i>
+            <span id="toast-msg" class="font-medium text-sm">Mensagem</span>
+        </div>
+    </div>
+
+    <script>
+        // State Variables
+        const timeSlots = [];
+        let bookings = JSON.parse(localStorage.getItem('map_bookings')) || {};
+        let isAdmin = false;
+        let timeToDelete = null;
+
+        // Elements
+        const grid = document.getElementById('schedule-grid');
+        const welcomeScreen = document.getElementById('welcome-screen');
+        const appContent = document.getElementById('app-content');
+        const btnBackHome = document.getElementById('btn-back-home');
+        
+        // Modals & Forms
+        const bookingForm = document.getElementById('booking-form');
+        const sensitiveDetails = document.getElementById('sensitive-details');
+        const restrictedArea = document.getElementById('restricted-area');
+        const btnExportExcel = document.getElementById('btn-export-excel');
+        const btnOpenAdmin = document.getElementById('btn-open-admin');
+
+        function generateTimeSlots() {
+            let startHour = 8;
+            let startMin = 0;
+            const endHour = 11; // Limite 11h
+            const interval = 20;
+
+            // Gera horários até 11:00 inclusive
+            while (startHour < endHour || (startHour === endHour && startMin === 0)) {
+                let h = startHour.toString().padStart(2, '0');
+                let m = startMin.toString().padStart(2, '0');
+                timeSlots.push(`${h}:${m}`);
+
+                startMin += interval;
+                if (startMin >= 60) {
+                    startMin -= 60;
+                    startHour++;
+                }
+            }
+        }
+
+        function renderGrid() {
+            grid.innerHTML = '';
+            
+            timeSlots.forEach(time => {
+                const isOccupied = bookings[time];
+                const slotDiv = document.createElement('div');
+                
+                slotDiv.className = `slot-card rounded-2xl p-5 border-2 flex flex-col items-center justify-center text-center transition-all duration-300 ${
+                    isOccupied 
+                    ? 'bg-slate-50 border-slate-200 cursor-pointer shadow-sm opacity-90' 
+                    : 'bg-white border-indigo-50 hover:border-indigo-300 cursor-pointer shadow-soft hover:shadow-lg'
+                }`;
+
+                const timeHtml = `<span class="text-2xl font-bold ${isOccupied ? 'text-slate-400' : 'text-indigo-600'}">${time}</span>`;
+                
+                const statusDotClass = isOccupied ? 'bg-rose-400' : 'bg-emerald-400';
+                const statusTextClass = isOccupied ? 'text-rose-500' : 'text-emerald-500';
+                const statusText = isOccupied ? 'Ocupado' : 'Disponível';
+
+                const statusHtml = `
+                    <div class="mt-3 flex items-center bg-white/50 px-3 py-1 rounded-full border ${isOccupied ? 'border-rose-100' : 'border-emerald-100'}">
+                        <span class="w-2.5 h-2.5 rounded-full ${statusDotClass} shadow-sm mr-2 ${!isOccupied ? 'animate-pulse' : ''}"></span>
+                        <span class="text-xs font-semibold ${statusTextClass} uppercase tracking-wider">${statusText}</span>
+                    </div>
+                `;
+
+                slotDiv.innerHTML = `${timeHtml} ${statusHtml}`;
+
+                slotDiv.addEventListener('click', () => {
+                    if (isOccupied) {
+                        openDetails(time);
+                    } else {
+                        document.getElementById('selected-time').value = time;
+                        document.getElementById('selected-time-display').innerText = time;
+                        bookingForm.reset();
+                        toggleModal('booking-modal');
+                    }
+                });
+
+                grid.appendChild(slotDiv);
+            });
+        }
+
+        function toggleModal(modalID) {
+            const modal = document.getElementById(modalID);
+            if (modal.classList.contains('opacity-0')) {
+                modal.classList.remove('opacity-0', 'pointer-events-none');
+                modal.classList.add('modal-active');
+            } else {
+                modal.classList.remove('modal-active');
+                setTimeout(() => {
+                    modal.classList.add('opacity-0', 'pointer-events-none');
+                }, 300);
+            }
+        }
+
+        function showToast(msg, type = "success") {
+            const toastCont = document.getElementById('toast-container');
+            const toast = document.getElementById('toast');
+            const icon = document.getElementById('toast-icon');
+            
+            document.getElementById('toast-msg').innerText = msg;
+            toast.classList.remove('hidden', 'toast-exit', 'toast-exit-active');
+            
+            if(type === 'error') {
+                icon.className = 'fas fa-times-circle text-rose-400';
+            } else {
+                icon.className = 'fas fa-check-circle text-emerald-400';
+            }
+
+            toast.classList.add('toast-enter', 'toast-enter-active');
+            
+            setTimeout(() => {
+                toast.classList.remove('toast-enter', 'toast-enter-active');
+                toast.classList.add('toast-exit', 'toast-exit-active');
+                setTimeout(() => toast.classList.add('hidden'), 300);
+            }, 3000);
+        }
+
+        // --- Configuração do Tour Guiado ---
+        function startTour() {
+            const driverObj = window.driver.js.driver({
+                showProgress: true,
+                animate: true,
+                nextBtnText: 'Avançar \u2192',
+                prevBtnText: '\u2190 Voltar',
+                doneBtnText: 'Entendi!',
+                progressText: 'Passo {{current}} de {{total}}',
+                steps: [
+                    {
+                        popover: {
+                            title: 'Bem-vindo(a)! \ud83d\udc4b',
+                            description: 'Vamos fazer um tour rápido para você aprender a agendar e cancelar sua apresentação.'
+                        }
+                    },
+                    {
+                        element: '#schedule-grid',
+                        popover: {
+                            title: '1. A Grade de Horários',
+                            description: 'Aqui estão todos os horários do dia 27/06. Para AGENDAR, clique em qualquer cartão verde (Disponível).',
+                            side: 'top',
+                            align: 'start'
+                        }
+                    },
+                    {
+                        popover: {
+                            title: '2. Criando sua Senha \ud83d\udd11',
+                            description: 'Ao clicar em um horário, você preencherá os dados do grupo e criará uma "Senha". Guarde ela muito bem, você precisará dela se quiser desmarcar depois!'
+                        }
+                    },
+                    {
+                        element: '#tour-legenda',
+                        popover: {
+                            title: '3. Como Cancelar \u274c',
+                            description: 'Os horários já agendados ficarão vermelhos (Ocupado). Para CANCELAR, basta clicar no seu horário vermelho, digitar a senha que você criou e clicar em Desmarcar.',
+                            side: 'bottom',
+                            align: 'start'
+                        }
+                    },
+                    {
+                        element: '#btn-open-admin',
+                        popover: {
+                            title: 'Área do Professor \ud83d\udd12',
+                            description: 'Este botão final é apenas para o professor acessar e gerenciar o evento. Pronto, você já sabe usar o sistema!',
+                            side: 'top',
+                            align: 'end'
+                        }
+                    }
+                ]
+            });
+            driverObj.drive();
+        }
+
+        document.getElementById('btn-start-tour').addEventListener('click', startTour);
+        // -----------------------------------
+
+        function openDetails(time) {
+            document.getElementById('detail-time').innerText = time;
+            timeToDelete = time;
+            
+            document.getElementById('cancel-error').classList.add('hidden');
+            document.getElementById('cancel-pin').value = '';
+            
+            if (isAdmin) {
+                restrictedArea.classList.add('hidden');
+                sensitiveDetails.classList.remove('hidden');
+                
+                const b = bookings[time];
+                document.getElementById('detail-title').innerText = b.title;
+                document.getElementById('detail-members').innerText = b.members;
+                document.getElementById('detail-materials').innerText = b.materials || 'Nenhum';
+                
+                const delBtn = document.getElementById('btn-delete-booking');
+                delBtn.onclick = () => {
+                    toggleModal('details-modal');
+                    setTimeout(() => toggleModal('confirm-delete-modal'), 350);
+                };
+            } else {
+                restrictedArea.classList.remove('hidden');
+                sensitiveDetails.classList.add('hidden');
+            }
+            
+            toggleModal('details-modal');
+        }
+
+        generateTimeSlots();
+        renderGrid();
+
+        document.getElementById('btn-enter').addEventListener('click', () => {
+            welcomeScreen.classList.add('opacity-0');
+            setTimeout(() => {
+                welcomeScreen.classList.add('hidden');
+                appContent.classList.remove('hidden', 'opacity-0');
+                appContent.classList.add('flex');
+                appContent.style.animation = 'toast-enter 0.6s ease forwards';
+                
+                // Dispara o tour automaticamente se for o primeiro acesso do usuário
+                if(!localStorage.getItem('tour_concluido_v1')) {
+                    setTimeout(() => {
+                        startTour();
+                        localStorage.setItem('tour_concluido_v1', 'true');
+                    }, 800); // Aguarda a animação da tela terminar
+                }
+            }, 700);
+        });
+
+        btnBackHome.addEventListener('click', () => {
+            appContent.style.animation = ''; // Remove a animação de entrada
+            appContent.classList.add('opacity-0'); // Aplica o fade-out
+            
+            setTimeout(() => {
+                appContent.classList.add('hidden');
+                appContent.classList.remove('flex');
+                
+                welcomeScreen.classList.remove('hidden');
+                // Pequeno atraso para a classe hidden sumir antes de animar a opacidade
+                setTimeout(() => {
+                    welcomeScreen.classList.remove('opacity-0');
+                }, 50);
+            }, 500);
+        });
+
+        document.querySelectorAll('.modal-overlay, .modal-close').forEach(el => {
+            el.addEventListener('click', () => {
+                if(document.getElementById('booking-modal').classList.contains('modal-active')) toggleModal('booking-modal');
+            });
+        });
+        document.querySelectorAll('.modal-overlay, .modal-close-details').forEach(el => {
+            el.addEventListener('click', () => {
+                if(document.getElementById('details-modal').classList.contains('modal-active')) toggleModal('details-modal');
+            });
+        });
+        document.querySelectorAll('.modal-overlay-admin, .modal-close-admin').forEach(el => {
+            el.addEventListener('click', () => {
+                if(document.getElementById('admin-modal').classList.contains('modal-active')) toggleModal('admin-modal');
+            });
+        });
+        document.querySelectorAll('.modal-overlay-confirm, #btn-cancel-delete').forEach(el => {
+            el.addEventListener('click', () => {
+                if(document.getElementById('confirm-delete-modal').classList.contains('modal-active')) toggleModal('confirm-delete-modal');
+            });
+        });
+
+        document.getElementById('btn-user-cancel').addEventListener('click', () => {
+            const pinInput = document.getElementById('cancel-pin').value;
+            // Verifica se a senha existe no booking e bate com a digitada
+            if (timeToDelete && bookings[timeToDelete] && bookings[timeToDelete].pin === pinInput && pinInput.trim() !== '') {
+                document.getElementById('cancel-error').classList.add('hidden');
+                toggleModal('details-modal');
+                // Abre o modal de confirmação
+                setTimeout(() => toggleModal('confirm-delete-modal'), 350);
+            } else {
+                document.getElementById('cancel-error').classList.remove('hidden');
+            }
+        });
+
+        bookingForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const time = document.getElementById('selected-time').value;
+            const title = document.getElementById('project-title').value;
+            const members = document.getElementById('group-members').value;
+            const materials = document.getElementById('materials').value;
+            const pin = document.getElementById('group-pin').value;
+
+            bookings[time] = { title, members, materials, pin };
+            localStorage.setItem('map_bookings', JSON.stringify(bookings));
+            
+            toggleModal('booking-modal');
+            renderGrid();
+            showToast("Apresentação agendada com sucesso!");
+        });
+
+        document.getElementById('btn-confirm-delete').addEventListener('click', () => {
+            if (timeToDelete && bookings[timeToDelete]) {
+                delete bookings[timeToDelete];
+                localStorage.setItem('map_bookings', JSON.stringify(bookings));
+                renderGrid();
+                showToast("Agendamento cancelado e horário liberado.");
+            }
+            toggleModal('confirm-delete-modal');
+            timeToDelete = null;
+        });
+
+        btnOpenAdmin.addEventListener('click', () => {
+            if (isAdmin) {
+                isAdmin = false;
+                showToast("Você saiu da Área do Professor.");
+                btnOpenAdmin.innerHTML = '<i class="fas fa-lock mr-2"></i> Área do Professor';
+                btnOpenAdmin.classList.replace('bg-indigo-50', 'bg-slate-50');
+                btnOpenAdmin.classList.replace('text-indigo-600', 'text-slate-600');
+                btnExportExcel.classList.add('hidden');
+            } else {
+                document.getElementById('admin-pwd').value = '';
+                toggleModal('admin-modal');
+                setTimeout(() => document.getElementById('admin-pwd').focus(), 350);
+            }
+        });
+
+        document.getElementById('btn-admin-submit').addEventListener('click', () => {
+            const pwd = document.getElementById('admin-pwd').value;
+            if (pwd === 'desafioMAP') { 
+                isAdmin = true;
+                showToast("Acesso liberado! Você agora pode ver e exportar os dados.", "success");
+                toggleModal('admin-modal');
+                btnOpenAdmin.innerHTML = '<i class="fas fa-unlock mr-2"></i> Sair da Área';
+                btnOpenAdmin.classList.replace('bg-slate-50', 'bg-indigo-50');
+                btnOpenAdmin.classList.replace('text-slate-600', 'text-indigo-600');
+                btnExportExcel.classList.remove('hidden');
+            } else {
+                showToast("Senha incorreta.", "error");
+            }
+        });
+
+        document.getElementById('admin-pwd').addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') {
+                document.getElementById('btn-admin-submit').click();
+            }
+        });
+
+        btnExportExcel.addEventListener('click', () => {
+            if (!isAdmin) return;
+
+            let csvContent = '\uFEFF'; 
+            csvContent += "Horario;Status;Titulo do Projeto;Integrantes;Materiais Necessarios\n";
+
+            timeSlots.forEach(time => {
+                if (bookings[time]) {
+                    const b = bookings[time];
+                    const title = `"${b.title.replace(/"/g, '""')}"`;
+                    const members = `"${b.members.replace(/"/g, '""')}"`;
+                    const materials = `"${(b.materials || '').replace(/"/g, '""')}"`;
+                    
+                    csvContent += `${time};Ocupado;${title};${members};${materials}\n`;
+                } else {
+                    csvContent += `${time};Disponível;;;\n`;
+                }
+            });
+
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement("a");
+            const url = URL.createObjectURL(blob);
+            link.setAttribute("href", url);
+            link.setAttribute("download", "agendamentos_27_junho.csv");
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            showToast("Planilha gerada com sucesso!", "success");
+        });
+    </script>
+</body>
+</html>
